@@ -46,7 +46,7 @@ for message in st.session_state.messages:
 # --- 5. استقبال أسئلة المستخدم ومعالجتها ---
 if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثال: كم إجمالي المتبقي على العميل عماد؟)..."):
     if not api_key:
-        st.error("يرجى إدخال مفتاح API Key في الشريط الجانبي أولاً.")
+        st.error("يرجى إدخل مفتاح API Key الجديد في الشريط الجانبي أولاً.")
         st.stop()
     if not uploaded_file:
         st.warning("يرجى رفع ملف المبيعات (Sales) من الشريط الجانبي لكي يتمكن البوت من الإجابة.")
@@ -61,29 +61,42 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
             df = pd.read_csv(uploaded_file)
         else:
             df = pd.read_excel(uploaded_file)
-        data_string = df.to_string(index=False)
+        
+        # تحويل البيانات لصيغة CSV مضغوطة لتوفير استهلاك الكلمات (Tokens)
+        data_string = df.to_csv(index=False)
     except Exception as e:
         st.error(f"حدث خطأ أثناء قراءة الملف: {e}")
         st.stop()
 
-    try:
-        genai.configure(api_key=api_key)
+    with st.chat_message("assistant"):
+        with st.spinner("جاري تحليل البيانات وإعداد الإجابة المحاسبية..."):
+            try:
+                genai.configure(api_key=api_key.strip())
+                full_prompt = f"إليك بيانات ملف Sales الحالية:\n\n{data_string}\n\nسؤال المستخدم: {prompt}"
 
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash",
-            system_instruction=SYSTEM_INSTRUCTION
-        )
+                # قائمة بالنماذج المتاحة للربط التلقائي
+                models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+                response = None
+                last_err = None
 
-        full_prompt = f"إليك بيانات ملف Sales الحالية:\n\n{data_string}\n\nسؤال المستخدم: {prompt}"
+                for m_name in models_to_try:
+                    try:
+                        model = genai.GenerativeModel(
+                            model_name=m_name,
+                            system_instruction=SYSTEM_INSTRUCTION
+                        )
+                        response = model.generate_content(full_prompt)
+                        if response and response.text:
+                            break
+                    except Exception as e:
+                        last_err = e
+                        continue
 
-        with st.chat_message("assistant"):
-            with st.spinner("جاري تحليل البيانات وإعداد الإجابة المحاسبية..."):
-                response = model.generate_content(full_prompt)
-                st.markdown(response.text)
-                
-        st.session_state.messages.append({"role": "assistant", "content": response.text})
-    except Exception as err:
-        if "429" in str(err):
-            st.error("⏳ تم تجاوز حد الاستخدام المجاني المؤقت. يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة، أو تجربة مفتاح API جديد.")
-        else:
-            st.error(f"حدث خطأ في الاتصال بنموذج الذكاء الاصطناعي: {err}")
+                if response and response.text:
+                    st.markdown(response.text)
+                    st.session_state.messages.append({"role": "assistant", "content": response.text})
+                else:
+                    st.error(f"لم نتمكن من الاتصال. تأكد من إدخال المفتاح الجديد بشكل صحيح. تفاصيل الخطأ: {last_err}")
+
+            except Exception as err:
+                st.error(f"حدث خطأ في النظام: {err}")
