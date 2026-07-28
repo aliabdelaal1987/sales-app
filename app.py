@@ -69,20 +69,20 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
     try:
         genai.configure(api_key=api_key)
         
-        # البحث التلقائي عن أحدث موديل يدعم generateContent
-        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        
-        # اختيار الموديل المناسب تلقائياً
-        selected_model = None
-        for m in available_models:
-            if 'flash' in m:
-                selected_model = m
-                break
-        if not selected_model and available_models:
-            selected_model = available_models[0]
+        # اختيار النموذج الفعال وتخطي النماذج المتوقفة
+        working_model = "gemini-2.5-flash"
+        try:
+            available_models = [
+                m.name for m in genai.list_models() 
+                if 'generateContent' in m.supported_generation_methods and '2.5' not in m.name and '1.5' not in m.name
+            ]
+            if available_models:
+                working_model = available_models[0]
+        except Exception:
+            pass
 
         model = genai.GenerativeModel(
-            model_name=selected_model,
+            model_name=working_model,
             system_instruction=SYSTEM_INSTRUCTION
         )
 
