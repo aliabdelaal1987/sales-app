@@ -66,17 +66,20 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
         st.error(f"حدث خطأ أثناء قراءة الملف: {e}")
         st.stop()
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=SYSTEM_INSTRUCTION
-    )
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            model_name="gemini-1.5-flash",
+            system_instruction=SYSTEM_INSTRUCTION
+        )
 
-    full_prompt = f"إليك بيانات ملف Sales الحالية:\n\n{data_string}\n\nسؤال المستخدم: {prompt}"
+        full_prompt = f"إليك بيانات ملف Sales الحالية:\n\n{data_string}\n\nسؤال المستخدم: {prompt}"
 
-    with st.chat_message("assistant"):
-        with st.spinner("جاري تحليل البيانات وإعداد الإجابة المحاسبية..."):
-            response = model.generate_content(full_prompt)
-            st.markdown(response.text)
-            
-    st.session_state.messages.append({"role": "assistant", "content": response.text})
+        with st.chat_message("assistant"):
+            with st.spinner("جاري تحليل البيانات وإعداد الإجابة المحاسبية..."):
+                response = model.generate_content(full_prompt)
+                st.markdown(response.text)
+                
+        st.session_state.messages.append({"role": "assistant", "content": response.text})
+    except Exception as err:
+        st.error(f"حدث خطأ في الاتصال بنموذج الذكاء الاصطناعي: {err}")
