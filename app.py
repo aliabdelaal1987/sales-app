@@ -46,7 +46,7 @@ for message in st.session_state.messages:
 # --- 5. استقبال أسئلة المستخدم ومعالجتها ---
 if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثال: كم إجمالي المتبقي على العميل عماد؟)..."):
     if not api_key:
-        st.error("يرجى إدخل مفتاح API Key الجديد في الشريط الجانبي أولاً.")
+        st.error("يرجى إدخال مفتاح API Key في الشريط الجانبي أولاً.")
         st.stop()
     if not uploaded_file:
         st.warning("يرجى رفع ملف المبيعات (Sales) من الشريط الجانبي لكي يتمكن البوت من الإجابة.")
@@ -62,7 +62,6 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
         else:
             df = pd.read_excel(uploaded_file)
         
-        # تحويل البيانات لصيغة CSV مضغوطة لتوفير استهلاك الكلمات (Tokens)
         data_string = df.to_csv(index=False)
     except Exception as e:
         st.error(f"حدث خطأ أثناء قراءة الملف: {e}")
@@ -72,31 +71,40 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
         with st.spinner("جاري تحليل البيانات وإعداد الإجابة المحاسبية..."):
             try:
                 genai.configure(api_key=api_key.strip())
+                
+                # جلب قائمة النماذج المتاحة والنشطة فعلياً لمفتاحك
+                available_models = [
+                    m.name for m in genai.list_models() 
+                    if 'generateContent' in m.supported_generation_methods
+                ]
+                
+                if not available_models:
+                    st.error("لم يتم العثور على أي نموذج نشط في حسابك. تأكد من إدخال المفتاح بشكل صحيح.")
+                    st.stop()
+                
+                # اختيار نموذج Flash المتاح أو أول نموذج يعمل
+                target_model = available_models[0]
+                for m_name in available_models:
+                    if 'flash' in m_name.lower():
+                        target_model = m_name
+                        break
+
+                model = genai.GenerativeModel(
+                    model_name=target_model,
+                    system_instruction=SYSTEM_INSTRUCTION
+                )
+                
                 full_prompt = f"إليك بيانات ملف Sales الحالية:\n\n{data_string}\n\nسؤال المستخدم: {prompt}"
-
-                # قائمة بالنماذج المتاحة للربط التلقائي
-                models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
-                response = None
-                last_err = None
-
-                for m_name in models_to_try:
-                    try:
-                        model = genai.GenerativeModel(
-                            model_name=m_name,
-                            system_instruction=SYSTEM_INSTRUCTION
-                        )
-                        response = model.generate_content(full_prompt)
-                        if response and response.text:
-                            break
-                    except Exception as e:
-                        last_err = e
-                        continue
+                response = model.generate_content(full_prompt)
 
                 if response and response.text:
                     st.markdown(response.text)
                     st.session_state.messages.append({"role": "assistant", "content": response.text})
                 else:
-                    st.error(f"لم نتمكن من الاتصال. تأكد من إدخال المفتاح الجديد بشكل صحيح. تفاصيل الخطأ: {last_err}")
+                    st.error("لم يتم استلام رد. يرجى محاولة إعادة إرسال السؤال.")
 
             except Exception as err:
-                st.error(f"حدث خطأ في النظام: {err}")
+                if "429" in str(err):
+                    st.error("⏳ تجاوزت حد الاستخدام المجاني السريع. انتظر 45 ثانية ثم اضغط Enter مجدداً.")
+                else:
+                    st.error(f"حدث خطأ أثناء الاتصال: {err}")
