@@ -68,21 +68,9 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
 
     try:
         genai.configure(api_key=api_key)
-        
-        # اختيار النموذج الفعال وتخطي النماذج المتوقفة
-        working_model = "gemini-2.5-flash"
-        try:
-            available_models = [
-                m.name for m in genai.list_models() 
-                if 'generateContent' in m.supported_generation_methods and '2.5' not in m.name and '1.5' not in m.name
-            ]
-            if available_models:
-                working_model = available_models[0]
-        except Exception:
-            pass
 
         model = genai.GenerativeModel(
-            model_name=working_model,
+            model_name="gemini-2.5-flash",
             system_instruction=SYSTEM_INSTRUCTION
         )
 
@@ -95,4 +83,7 @@ if prompt := st.chat_input("اكتب سؤالك المحاسبي هنا (مثا�
                 
         st.session_state.messages.append({"role": "assistant", "content": response.text})
     except Exception as err:
-        st.error(f"حدث خطأ في الاتصال بنموذج الذكاء الاصطناعي: {err}")
+        if "429" in str(err):
+            st.error("⏳ تم تجاوز حد الاستخدام المجاني المؤقت. يرجى الانتظار دقيقة واحدة ثم إعادة المحاولة، أو تجربة مفتاح API جديد.")
+        else:
+            st.error(f"حدث خطأ في الاتصال بنموذج الذكاء الاصطناعي: {err}")
